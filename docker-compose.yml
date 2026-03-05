@@ -1,0 +1,49 @@
+version: '3.9'
+
+services:
+  # ── Backend API Server ──
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Frontend (Vite Dev Server) ──
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+    restart: unless-stopped
+
+  # ── VietTTS Server (Optional - uncomment to use) ──
+  # viettts:
+  #   image: ghcr.io/dangvansam/viet-tts:latest
+  #   ports:
+  #     - "8298:8298"
+  #   volumes:
+  #     - ./pretrained-models:/app/pretrained-models
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   command: viettts server --host 0.0.0.0 --port 8298

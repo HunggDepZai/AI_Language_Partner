@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tro Ly AI Tieng Viet</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127483;&#127475;</text></svg>" />
+  <style>
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d27;
+  --bg-card: #22263a;
+  --bg-user: #2d3250;
+  --bg-ai: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --red: #ef4444;
+  --red-glow: rgba(239, 68, 68, 0.3);
+  --green: #10b981;
+  --yellow: #f59e0b;
+  --border: #2d3348;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 768px;
+  margin: 0 auto;
+  background: var(--bg-secondary);
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.header-flag { font-size: 24px; }
+.header-left h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+.connection-badge {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(100, 116, 139, 0.15);
+  transition: all 0.3s;
+}
+.connection-badge.connected { color: var(--green); background: rgba(16, 185, 129, 0.12); }
+.app-main { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.chat-messages {
+  padding: 16px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.empty-state { margin: auto; text-align: center; padding: 40px 20px; opacity: 0.7; }
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.empty-subtitle { font-size: 14px; color: var(--text-secondary); }
+.message { display: flex; gap: 10px; max-width: 88%; animation: msgIn 0.3s ease-out; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.message-user { align-self: flex-end; flex-direction: row-reverse; }
+.message-assistant { align-self: flex-start; }
+.message-avatar {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--bg-card);
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+  flex-shrink: 0; border: 1px solid var(--border);
+}
+.message-content { padding: 10px 14px; border-radius: var(--radius); line-height: 1.55; }
+.message-user .message-content { background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+.message-assistant .message-content { background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.message-sender { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; opacity: 0.6; }
+.message-text { font-size: 14.5px; word-wrap: break-word; }
+.typing-cursor { animation: blink 0.8s infinite; color: var(--accent); font-weight: 300; }
+@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+.app-footer {
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding: 12px 20px 20px;
+}
+.voice-control { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.status-bar { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; transition: background-color 0.3s; }
+.error-banner {
+  width: 100%; padding: 8px 14px; background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--red); text-align: center;
+}
+.mic-container { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.mic-button {
+  width: 68px; height: 68px; border-radius: 50%; border: 3px solid var(--accent);
+  background: transparent; color: var(--accent); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.mic-button:hover { background: rgba(59, 130, 246, 0.1); transform: scale(1.05); }
+.mic-button:active { transform: scale(0.95); }
+.mic-button.mic-recording {
+  border-color: var(--red); color: var(--red); background: var(--red-glow);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.mic-button.mic-busy { border-color: var(--accent); color: var(--accent); opacity: 0.9; }
+.mic-button:disabled { opacity: 0.4; cursor: not-allowed; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--red-glow); } 50% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); } }
+.mic-hint { font-size: 12px; color: var(--text-muted); text-align: center; }
+.controls-row { display: flex; align-items: center; justify-content: center; gap: 16px; width: 100%; }
+.control-group { display: flex; align-items: center; gap: 8px; }
+.control-group label { font-size: 12px; color: var(--text-muted); }
+.control-group select {
+  padding: 5px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--bg-secondary); color: var(--text-primary); font-size: 13px; cursor: pointer; outline: none;
+}
+.control-group select:focus { border-color: var(--accent); }
+.btn-clear {
+  display: flex; align-items: center; gap: 5px; padding: 5px 12px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: transparent; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: all 0.2s;
+}
+.btn-clear:hover { border-color: var(--red); color: var(--red); background: rgba(239, 68, 68, 0.08); }
+canvas#visualizer { display: block; margin: 0 auto; }
+.app-main::-webkit-scrollbar { width: 6px; }
+.app-main::-webkit-scrollbar-track { background: transparent; }
+.app-main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+@media (max-width: 480px) {
+  .app-header { padding: 10px 14px; }
+  .header-left h1 { font-size: 15px; }
+  .chat-messages { padding: 12px; }
+  .message { max-width: 92%; }
+  .mic-button { width: 60px; height: 60px; }
+  .controls-row { flex-wrap: wrap; gap: 10px; }
+}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div class="header-left">
+      <span class="header-flag">&#127483;&#127475;</span>
+      <h1>Tro Ly AI Tieng Viet</h1>
+    </div>
+    <div class="header-right">
+      <span id="connBadge" class="connection-badge">&#9675; Chua ket noi</span>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <div id="chatMessages" class="chat-messages">
+      <div id="emptyState" class="empty-state">
+        <div class="empty-icon">&#127908;</div>
+        <p class="empty-title">Xin chao! Toi la tro ly AI tieng Viet</p>
+        <p class="empty-subtitle">Nhan giu nut micro de bat dau noi chuyen</p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <div class="voice-control">
+      <div class="status-bar">
+        <span id="statusDot" class="status-dot" style="background-color:#6b7280"></span>
+        <span id="statusText">Chua ket noi</span>
+      </div>
+      <div id="errorBanner" class="error-banner" style="display:none"></div>
+      <canvas id="visualizer" width="200" height="80"></canvas>
+      <div class="mic-container">
+        <button id="micBtn" class="mic-button"
+          onmousedown="handleMicDown()" onmouseup="handleMicUp()" onmouseleave="handleMicUp()"
+          ontouchstart="handleMicDown()" ontouchend="handleMicUp()">
+          <svg id="micIcon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </button>
+        <p id="micHint" class="mic-hint">Nhan de ket noi</p>
+      </div>
+      <div class="controls-row">
+        <div class="control-group">
+          <label>Giong noi</label>
+          <select id="voiceSelect" onchange="updateConfig()">
+            <option value="female">Hoai My (Nu)</option>
+            <option value="male">Nam Minh (Nam)</option>
+          </select>
+        </div>
+        <button class="btn-clear" onclick="clearMessages()">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+          </svg>
+          Xoa
+        </button>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+// ── State ──
+let ws = null;
+let status = 'idle'; // idle, connecting, ready, recording, processing, speaking
+let isConnected = false;
+let mediaStream = null;
+let audioContext = null;
+let processor = null;
+let audioChunks = [];
+let isPlaying = false;
+let currentAudio = null;
+let currentAiText = '';
+let messages = [];
+let cancelled = false;
+
+const STATUS_TEXT = {
+  idle: 'Chua ket noi', connecting: 'Dang ket noi...',
+  ready: 'San sang', recording: 'Dang nghe...',
+  processing: 'Dang nhan dang...', speaking: 'Dang tra loi...',
+};
+const STATUS_COLOR = {
+  idle: '#6b7280', connecting: '#f59e0b',
+  ready: '#10b981', recording: '#ef4444',
+  processing: '#f59e0b', speaking: '#3b82f6',
+};
+
+// ── Visualizer ──
+let phase = 0;
+function drawVisualizer() {
+  const canvas = document.getElementById('visualizer');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = 200, H = 80;
+  ctx.clearRect(0, 0, W, H);
+  const amplitude = status === 'recording' ? 28 : status === 'speaking' ? 18 : status === 'processing' ? 10 : 4;
+  const speed = status === 'recording' ? 0.08 : status === 'speaking' ? 0.05 : 0.02;
+  const color = STATUS_COLOR[status] || '#6b7280';
+  phase += speed;
+  for (let wave = 0; wave < 3; wave++) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5 - wave * 0.7;
+    ctx.globalAlpha = 1 - wave * 0.3;
+    for (let x = 0; x < W; x++) {
+      const t = (x / W) * Math.PI * 4;
+      const y = H / 2 + Math.sin(t + phase + wave * 0.8) * amplitude * (1 - wave * 0.2) * Math.sin((x / W) * Math.PI);
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(drawVisualizer);
+}
+drawVisualizer();
+
+// ── UI Update ──
+function setStatus(s) {
+  status = s;
+  document.getElementById('statusDot').style.backgroundColor = STATUS_COLOR[s] || '#6b7280';
+  document.getElementById('statusText').textContent = STATUS_TEXT[s] || s;
+  updateMicButton();
+}
+
+function setError(msg) {
+  const el = document.getElementById('errorBanner');
+  if (msg) { el.textContent = '⚠️ ' + msg; el.style.display = 'block'; }
+  else { el.style.display = 'none'; }
+}
+
+function updateMicButton() {
+  const btn = document.getElementById('micBtn');
+  const hint = document.getElementById('micHint');
+  const isRec = status === 'recording';
+  const isBusy = status === 'processing' || status === 'speaking';
+  btn.className = 'mic-button' + (isRec ? ' mic-recording' : '') + (isBusy ? ' mic-busy' : '');
+  btn.disabled = status === 'connecting';
+
+  if (!isConnected) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>';
+    hint.textContent = 'Nhan de ket noi';
+  } else if (isRec) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>';
+    hint.textContent = 'Dang nghe... Tha de gui';
+  } else if (isBusy) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><rect x="5" y="3" width="4" height="18" rx="1" /><rect x="15" y="3" width="4" height="18" rx="1" /></svg>';
+    hint.textContent = 'Nhan de ngat';
+  } else {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0 0 14 0" /><line x1="12" y1="17" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" /></svg>';
+    hint.textContent = 'Giu nut de noi';
+  }
+}
+
+function updateConnectionBadge() {
+  const el = document.getElementById('connBadge');
+  el.className = 'connection-badge' + (isConnected ? ' connected' : '');
+  el.innerHTML = isConnected ? '&#9679; Da ket noi' : '&#9675; Chua ket noi';
+}
+
+function renderMessages() {
+  const el = document.getElementById('chatMessages');
+  const empty = document.getElementById('emptyState');
+  if (messages.length === 0 && !currentAiText) {
+    if (!document.getElementById('emptyState')) {
+      el.innerHTML = '<div id="emptyState" class="empty-state"><div class="empty-icon">&#127908;</div><p class="empty-title">Xin chao! Toi la tro ly AI tieng Viet</p><p class="empty-subtitle">Nhan giu nut micro de bat dau noi chuyen</p></div>';
+    }
+    return;
+  }
+
+  let html = '';
+  for (const msg of messages) {
+    const isUser = msg.role === 'user';
+    html += '<div class="message message-' + msg.role + '">' +
+      '<div class="message-avatar">' + (isUser ? '&#128100;' : '&#129302;') + '</div>' +
+      '<div class="message-content"><div class="message-sender">' + (isUser ? 'Ban' : 'Tro ly AI') + '</div>' +
+      '<div class="message-text">' + escapeHtml(msg.text) + '</div></div></div>';
+  }
+  if (currentAiText) {
+    html += '<div class="message message-assistant">' +
+      '<div class="message-avatar">&#129302;</div>' +
+      '<div class="message-content"><div class="message-sender">Tro ly AI</div>' +
+      '<div class="message-text">' + escapeHtml(currentAiText) + '<span class="typing-cursor">&#9612;</span></div></div></div>';
+  }
+  html += '<div id="chatBottom"></div>';
+  el.innerHTML = html;
+  document.getElementById('chatBottom')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── WebSocket ──
+function connect() {
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  setStatus('connecting');
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws/voice');
+
+  ws.onopen = () => {
+    isConnected = true;
+    setStatus('ready');
+    setError(null);
+    updateConnectionBadge();
+    ws.send(JSON.stringify({ type: 'config', voice: document.getElementById('voiceSelect').value, mode: 'push_to_talk' }));
+  };
+  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+  ws.onerror = () => {
+    setError('Khong ket noi duoc server.');
+    isConnected = false;
+    setStatus('idle');
+    updateConnectionBadge();
+  };
+  ws.onclose = () => {
+    isConnected = false;
+    setStatus('idle');
+    updateConnectionBadge();
+  };
+}
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'recording_started': setStatus('recording'); break;
+    case 'status':
+      if (msg.stage === 'stt') setStatus('processing');
+      if (msg.stage === 'llm') setStatus('speaking');
+      break;
+    case 'transcript_user':
+      messages.push({ role: 'user', text: msg.text });
+      currentAiText = '';
+      renderMessages();
+      break;
+    case 'transcript_ai_partial':
+      currentAiText = msg.full_text;
+      renderMessages();
+      break;
+    case 'transcript_ai':
+      if (msg.done) {
+        messages.push({ role: 'assistant', text: msg.text });
+        currentAiText = '';
+        renderMessages();
+      }
+      break;
+    case 'audio_chunk':
+      audioChunks.push(msg.data);
+      playAudioQueue();
+      break;
+    case 'audio_done':
+      setStatus('ready');
+      break;
+    case 'interrupted':
+      setStatus('ready');
+      stopAudioPlayback();
+      break;
+    case 'error':
+      setError(msg.message);
+      setStatus('ready');
+      break;
+  }
+}
+
+// ── Audio Playback ──
+async function playAudioQueue() {
+  if (isPlaying || audioChunks.length === 0) return;
+  isPlaying = true;
+  while (audioChunks.length > 0) {
+    const base64 = audioChunks.shift();
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'audio/mp3' });
+    const url = URL.createObjectURL(blob);
+    await new Promise((resolve) => {
+      const audio = new Audio(url);
+      currentAudio = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+      audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+      audio.play().catch(resolve);
+    });
+  }
+  isPlaying = false;
+}
+
+function stopAudioPlayback() {
+  audioChunks = [];
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  isPlaying = false;
+}
+
+// ── Microphone ──
+async function startRecording() {
+  try {
+    stopAudioPlayback();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+    mediaStream = stream;
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(stream);
+    processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processor.onaudioprocess = (e) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const float32 = e.inputBuffer.getChannelData(0);
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32768)));
+        }
+        // Send in smaller pieces to avoid btoa stack overflow
+        const uint8 = new Uint8Array(int16.buffer);
+        let b64 = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8.length; i += chunkSize) {
+          const slice = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
+          b64 += String.fromCharCode.apply(null, slice);
+        }
+        ws.send(JSON.stringify({ type: 'audio_chunk', data: btoa(b64) }));
+      }
+    };
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+    ws.send(JSON.stringify({ type: 'start_recording' }));
+    setStatus('recording');
+    setError(null);
+  } catch (err) {
+    setError('Khong truy cap duoc microphone. Hay cho phep quyen truy cap.');
+  }
+}
+
+function stopRecording() {
+  if (processor) { processor.disconnect(); processor = null; }
+  if (audioContext) { audioContext.close(); audioContext = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'stop_recording' }));
+  }
+  setStatus('processing');
+}
+
+// ── Button Handlers ──
+function handleMicDown() {
+  if (!isConnected) { connect(); return; }
+  if (status === 'speaking') { interrupt(); return; }
+  if (status === 'ready' || status === 'idle') { startRecording(); }
+}
+function handleMicUp() {
+  if (status === 'recording') { stopRecording(); }
+}
+function interrupt() {
+  stopAudioPlayback();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'interrupt' }));
+  }
+}
+function updateConfig() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'config', voice: document.getElementById('voiceSelect').value, mode: 'push_to_talk' }));
+  }
+}
+function clearMessages() {
+  messages = [];
+  currentAiText = '';
+  renderMessages();
+}
+</script>
+</body>
+</html>

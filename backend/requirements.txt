@@ -1,0 +1,35 @@
+# ── Core Server ──
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+websockets==14.1
+python-dotenv==1.0.1
+
+# ── STT: OpenAI Whisper API ──
+openai>=1.58.0
+
+# ── STT: Groq Whisper (Optional - faster, free) ──
+groq>=0.13.0
+
+# ── TTS: Edge-TTS (Microsoft Free) ──
+edge-tts>=6.1.18
+
+# ── LLM: HTTP client for Ollama ──
+httpx>=0.28.0
+
+# ── Audio processing ──
+numpy>=1.26.0
+
+# ── VAD: Silero (Optional) ──
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# ── RAG ── (module mới)
+langchain>=0.3
+langchain-community>=0.3
+langchain-openai>=0.2
+chromadb>=0.5
+pymupdf          # Đọc PDF
+python-docx      # Đọc Word
+
+# ── Utils ──
+aiofiles>=24.0
