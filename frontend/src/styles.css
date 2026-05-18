@@ -20,6 +20,8 @@
   --border: #2d3348;
   --radius: 12px;
   --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
@@ -31,7 +33,10 @@
 
 body {
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
-  background: var(--bg-primary);
+  background: radial-gradient(ellipse at 70% 50%, rgba(15, 40, 80, 0.9) 0%, rgba(10, 15, 30, 1) 60%),
+              radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+              #0a0f1e;
+  background-attachment: fixed;
   color: var(--text-primary);
   overflow: hidden;
   height: 100vh;
@@ -44,23 +49,28 @@ body {
 
 /* ── App Layout ── */
 .app {
-  display: flex;
-  flex-direction: column;
+  display: block;
   height: 100vh;
-  max-width: 768px;
-  margin: 0 auto;
-  background: var(--bg-secondary);
+  width: 100vw;
+  background: transparent;
+  position: relative;
+  overflow: hidden;
 }
 
-/* ── Header ── */
 .app-header {
+  position: absolute;
+  top: 15px;
+  left: 20px;
+  right: 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  padding: 10px 18px;
+  background: rgba(34, 38, 58, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  z-index: 20;
 }
 
 .header-left {
@@ -95,17 +105,44 @@ body {
 
 /* ── Chat Area ── */
 .app-main {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  position: absolute;
+  left: 15px;
+  bottom: 85px;
+  /* Đặt phía trên bộ chọn giọng nói một chút */
+  top: auto;
+  /* Bỏ vị trí top cố định */
+  height: min(500px, 60vh);
+  /* Tăng chiều cao tối đa */
+  width: 360px;
+  /* Tăng chiều ngang từ 280px lên 360px */
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 20;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
 .chat-messages {
+  flex: 1;
   padding: 16px;
-  min-height: 100%;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  scrollbar-width: thin;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 
 /* ── Empty State ── */
@@ -153,8 +190,15 @@ body {
 }
 
 @keyframes msgIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-user {
@@ -167,47 +211,72 @@ body {
 }
 
 .message-avatar {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  /* Thu nhỏ avatar từ 34px xuống 28px */
+  height: 28px;
   border-radius: 50%;
   background: var(--bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
   flex-shrink: 0;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .message-content {
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  line-height: 1.55;
+  padding: 8px 12px;
+  /* Giảm padding bong bóng */
+  border-radius: 12px;
+  line-height: 1.4;
 }
 
 .message-user .message-content {
-  background: var(--accent);
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: white;
   border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 
 .message-assistant .message-content {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-bottom-left-radius: 4px;
 }
 
+.message-current-sentence {
+  border: 1px solid var(--accent) !important;
+  background: rgba(59, 130, 246, 0.15) !important;
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0% {
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+
+  50% {
+    border-color: rgba(59, 130, 246, 1);
+  }
+
+  100% {
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+}
+
 .message-sender {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  /* Thu nhỏ label người gửi */
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-  opacity: 0.6;
+  margin-bottom: 2px;
+  opacity: 0.5;
 }
 
 .message-text {
-  font-size: 14.5px;
+  font-size: 13px;
+  /* Thu nhỏ chữ trong chat từ 14.5px xuống 13px */
   word-wrap: break-word;
 }
 
@@ -218,23 +287,40 @@ body {
 }
 
 @keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 /* ── Footer / Voice Control ── */
 .app-footer {
-  flex-shrink: 0;
-  background: var(--bg-card);
-  border-top: 1px solid var(--border);
-  padding: 12px 20px 20px;
+  position: absolute;
+  bottom: 0px;
+  left: 15px;
+  width: 360px;
+  /* Đồng bộ chiều ngang với khung chat */
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  padding: 6px 12px 8px;
+  /* Giảm padding trên và dưới để footer mỏng hơn */
+  border-radius: 16px 16px 0 0;
+  z-index: 20;
 }
 
 .voice-control {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  gap: 4px;
+  /* Giảm gap tối đa */
 }
 
 /* ── Status Bar ── */
@@ -285,10 +371,11 @@ body {
 }
 
 .mic-button {
-  width: 72px;
-  height: 72px;
+  width: 44px;
+  /* Thu nhỏ mic siêu gọn từ 56px xuống 44px */
+  height: 44px;
   border-radius: 50%;
-  border: 3px solid var(--accent);
+  border: 2px solid var(--accent);
   background: transparent;
   color: var(--accent);
   cursor: pointer;
@@ -317,8 +404,15 @@ body {
 }
 
 @keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 0 var(--green-glow); }
-  50% { box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--green-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
+  }
 }
 
 /* User speaking - red pulse */
@@ -330,8 +424,15 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--red-glow); }
-  50% { box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--red-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 0 18px rgba(239, 68, 68, 0);
+  }
 }
 
 /* AI speaking - blue glow */
@@ -343,8 +444,15 @@ body {
 }
 
 @keyframes aiGlow {
-  0%, 100% { box-shadow: 0 0 0 0 var(--blue-glow); }
-  50% { box-shadow: 0 0 0 14px rgba(59, 130, 246, 0); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--blue-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 0 14px rgba(59, 130, 246, 0);
+  }
 }
 
 /* Active conversation (generic) */
@@ -488,5 +596,118 @@ body {
   .controls-row {
     flex-wrap: wrap;
     gap: 10px;
+  }
+}
+
+/* ── Chat Input ── */
+.chat-input-container {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.5);
+  /* Đậm hơn để nổi bật */
+  border: 1px solid var(--accent);
+  /* Viền màu xanh để dễ thấy */
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: white;
+  font-size: 13px;
+  outline: none;
+}
+
+.chat-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.chat-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+}
+
+.chat-send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chat-send-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.chat-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chat-input-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mini-mic-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.mini-mic-btn.active-on {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.mini-mic-btn.active-listening {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--green);
+  color: var(--green);
+  animation: miniPulse 1.5s infinite;
+}
+
+.mini-mic-btn.active-speaking {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.mini-mic-btn.active-ai {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@keyframes miniPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
   }
 }

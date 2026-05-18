@@ -13,8 +13,10 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DATA_DIR = os.getenv("DATA_DIR", "./data")
-CHROMA_DIR = os.getenv("CHROMA_DB_PATH", "./chroma_db")
+# Dùng absolute path tính từ vị trí file ingest.py để tránh lỗi khi chạy từ thư mục khác
+_INGEST_DIR = Path(__file__).resolve().parent
+DATA_DIR = os.getenv("DATA_DIR", str(_INGEST_DIR / "data"))
+CHROMA_DIR = os.getenv("CHROMA_DB_PATH", str(_INGEST_DIR / "chroma_db"))
 COLLECTION_NAME = "tourism_knowledge"
 CHUNK_SIZE = 500      # tokens per chunk
 CHUNK_OVERLAP = 50   # tokens overlap
@@ -39,7 +41,7 @@ def main():
         # Thử đọc từ .env
         env_file = Path("../.env") if not Path(".env").exists() else Path(".env")
         if env_file.exists():
-            for line in env_file.read_text().splitlines():
+            for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
                 if line.startswith("OPENAI_API_KEY="):
                     api_key = line.split("=", 1)[1].strip()
                     os.environ["OPENAI_API_KEY"] = api_key
@@ -54,10 +56,13 @@ def main():
     try:
         from langchain_community.vectorstores import Chroma
         from langchain_openai import OpenAIEmbeddings
-        from langchain.schema import Document
+        try:
+            from langchain_core.documents import Document
+        except ImportError:
+            from langchain.schema import Document  # fallback phiên bản cũ
     except ImportError as e:
         print(f"❌ Thiếu dependency: {e}")
-        print("   Chạy: pip install langchain langchain-community langchain-openai chromadb")
+        print("   Chạy: pip install langchain langchain-core langchain-community langchain-openai chromadb")
         sys.exit(1)
 
     from services.document_loader import load_document
@@ -79,12 +84,6 @@ def main():
     if not files:
         print(f"⚠️  Không tìm thấy tài liệu trong {DATA_DIR}/")
         print(f"   Hỗ trợ: {', '.join(supported_exts)}")
-        
-        # Tạo tài liệu mẫu
-        sample_file = data_path / "sample_hanoi.txt"
-        sample_file.write_text(SAMPLE_CONTENT, encoding="utf-8")
-        print(f"✅ Đã tạo tài liệu mẫu: {sample_file}")
-        files = [sample_file]
 
     print(f"\n🔍 Tìm thấy {len(files)} file tài liệu:")
     for f in files:
@@ -94,7 +93,7 @@ def main():
     print(f"\n⚙️  Khởi tạo OpenAI Embeddings (text-embedding-3-small)...")
     embeddings = OpenAIEmbeddings(
         model="text-embedding-3-small",
-        openai_api_key=api_key
+        api_key=api_key
     )
 
     # Load & chunk tất cả tài liệu
@@ -109,12 +108,32 @@ def main():
             for i, chunk in enumerate(chunks):
                 meta = page_data["metadata"].copy()
                 meta["chunk_id"] = f"{file_path.stem}_p{meta['page']}_c{i}"
+                # ── Metadata mở rộng cho Filtering ──────────────────────────
+                # Gán tự động dựa trên tên file; có thể mở rộng bằng config YAML
+                meta.setdefault("department", "general")
+                meta.setdefault("urgency",    "normal")
+                meta.setdefault("tags",       "tourism,vietnam")
+                # Phân loại nhanh theo tên file
+                name_lower = file_path.stem.lower()
+                if any(k in name_lower for k in ["hanoi", "ha_noi", "thủ đô"]):
+                    meta["tags"] = "tourism,vietnam,hanoi"
+                elif any(k in name_lower for k in ["hoian", "hoi_an", "hội an"]):
+                    meta["tags"] = "tourism,vietnam,hoian"
+                elif any(k in name_lower for k in ["sapa", "sa pa"]):
+                    meta["tags"] = "tourism,vietnam,sapa"
+                # ─────────────────────────────────────────────────────────────
                 all_docs.append(Document(page_content=chunk, metadata=meta))
                 file_docs += 1
         total_chunks += file_docs
         print(f"   ✅ {file_path.name}: {file_docs} chunks")
 
     print(f"\n📊 Tổng: {total_chunks} chunks từ {len(files)} file")
+
+    if total_chunks == 0:
+        print("\n❌ Không có chunk nào được tạo ra!")
+        print("   Kiểm tra lại file tài liệu trong thư mục data/")
+        print("   Đảm bảo PyMuPDF đã cài: pip install pymupdf")
+        sys.exit(1)
 
     # Lưu vào ChromaDB
     print(f"\n💾 Đang lưu vào ChromaDB ({CHROMA_DIR})...")
@@ -147,59 +166,18 @@ def main():
 
     print(f"\n\n✅ Hoàn tất! ChromaDB đã sẵn sàng tại: {CHROMA_DIR}")
     print(f"   Collection: {COLLECTION_NAME}")
-    print(f"   Tổng chunks: {vectorstore._collection.count()}")
+    if vectorstore is not None:
+        try:
+            count = vectorstore._collection.count()
+        except Exception:
+            count = total_chunks
+    else:
+        count = total_chunks
+    print(f"   Tổng chunks: {count}")
     print(f"\n🚀 Giờ chạy backend: python main.py\n")
 
 
-SAMPLE_CONTENT = """
-Hà Nội - Thủ đô ngàn năm văn hiến
 
-Hà Nội là thủ đô của Việt Nam, nằm ở đồng bằng sông Hồng, miền Bắc Việt Nam.
-Thành phố có lịch sử hơn 1000 năm với nhiều di tích văn hóa lịch sử quý giá.
-
-Hồ Hoàn Kiếm - Trái tim của Hà Nội
-Hồ Hoàn Kiếm hay còn gọi là Hồ Gươm nằm ngay trung tâm Hà Nội.
-Theo truyền thuyết, vua Lê Lợi trả lại thanh gươm thần cho Rùa vàng tại đây sau khi đánh đuổi quân Minh.
-Tháp Rùa nằm giữa hồ là biểu tượng nổi tiếng của Hà Nội.
-Đền Ngọc Sơn trên đảo nhỏ trong hồ được kết nối với bờ bằng cầu Thê Húc màu đỏ.
-
-Phố cổ Hà Nội
-Khu phố cổ Hà Nội gồm 36 phố phường, mỗi phố chuyên bán một loại hàng hóa.
-Phố Hàng Đào chuyên vải lụa, Phố Hàng Bạc chuyên đồ bạc, Phố Hàng Gai chuyên đồ thủ công.
-Kiến trúc nhà ống đặc trưng với mặt tiền hẹp nhưng chiều sâu lớn.
-Thời gian tốt nhất để thăm: sáng sớm hoặc chiều tối để tránh nắng.
-
-Văn Miếu - Quốc Tử Giám
-Văn Miếu được xây dựng năm 1070 dưới triều vua Lý Thánh Tông.
-Đây là trường đại học đầu tiên của Việt Nam, đào tạo nhân tài cho đất nước.
-82 bia tiến sĩ khắc tên các vị đỗ đạt từ 1442 đến 1779.
-Giờ mở cửa: 8h-17h các ngày trong tuần.
-Giá vé: 30.000đ người lớn, 15.000đ học sinh.
-
-Ẩm thực Hà Nội
-Phở Hà Nội có nước dùng trong, ngọt từ xương bò, thịt mỏng và bánh phở mềm.
-Bún chả là món đặc sản với bún trắng, chả nướng và nước chấm chua ngọt.
-Bánh cuốn Thanh Trì được làm từ gạo xay mịn, tráng mỏng, nhân thịt và mộc nhĩ.
-Chả cá Lã Vọng là món ăn truyền thống với cá lăng nướng trên than hoa.
-Cà phê trứng Hà Nội - đặc sản độc đáo với lòng đỏ trứng đánh bông phủ lên cà phê.
-
-Hội An - Phố cổ UNESCO
-
-Hội An là thành phố cổ nằm bên bờ sông Thu Bồn, tỉnh Quảng Nam.
-Được UNESCO công nhận là Di sản Văn hóa Thế giới năm 1999.
-
-Kiến trúc độc đáo
-Hội An có hơn 1000 công trình kiến trúc cổ được bảo tồn nguyên vẹn.
-Chùa Cầu - biểu tượng của Hội An, được xây dựng vào thế kỷ 18 bởi người Nhật.
-Nhà cổ Tấn Ký có tuổi đời hơn 200 năm với kiến trúc pha trộn Nhật-Trung-Việt.
-
-Ẩm thực Hội An
-Cao lầu - món mì đặc trưng chỉ có ở Hội An, nước dùng từ tro củi Cham.
-Mì Quảng - sợi mì vàng với tôm, thịt, rau sống và bánh đa giòn.
-Bánh mì Hội An nổi tiếng thế giới với vỏ giòn, nhân đa dạng.
-
-Thời điểm tốt nhất để đến Hội An: tháng 2-4 và tháng 8-10, tránh mùa mưa bão.
-"""
 
 if __name__ == "__main__":
     main()

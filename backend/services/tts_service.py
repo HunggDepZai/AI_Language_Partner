@@ -33,6 +33,10 @@ class TTSService:
         if not text or not text.strip():
             return None
 
+        from utils.text_norm import normalize_vietnamese_text
+        text = normalize_vietnamese_text(text)
+        logger.debug(f"TTS Norm: {text}")
+
         try:
             if self.engine == "vieneu":
                 return await self._synthesize_vieneu(text, voice)
