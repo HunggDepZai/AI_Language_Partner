@@ -23,13 +23,15 @@ numpy>=1.26.0
 torch>=2.0.0
 torchaudio>=2.0.0
 
-# ── RAG ── (module mới)
+# ── RAG ── (Hybrid Search + Reranking)
 langchain>=0.3
 langchain-community>=0.3
 langchain-openai>=0.2
 chromadb>=0.5
 pymupdf          # Đọc PDF
 python-docx      # Đọc Word
+rank-bm25>=0.2.2 # BM25 Keyword Search
+sentence-transformers>=3.0.0  # Cross-encoder Re-Ranking (chạy local, không cần API)
 
 # ── Utils ──
 aiofiles>=24.0
