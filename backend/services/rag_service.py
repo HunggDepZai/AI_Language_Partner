@@ -3,7 +3,7 @@ RAG Service — Hybrid Retrieval-Augmented Generation
 Pipeline: Vector Search ║ BM25 Keyword Search → RRF Fusion → Re-Ranking → Metadata Filter
 
 Thành phần:
-  1. Vector Search      — ChromaDB + OpenAI text-embedding-3-small (ngữ nghĩa sâu)
+  1. Vector Search      — Qdrant Cloud + HuggingFace vietnamese-embedding (ngữ nghĩa sâu)
   2. Keyword Search     — BM25 (rank-bm25), exact/partial match
   3. Hybrid Layer       — Reciprocal Rank Fusion (RRF) kết hợp 2 ranking
   4. Dynamic Re-Ranking — cross-encoder ms-marco (sentence-transformers, local ~80ms)
@@ -16,14 +16,16 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings
+from langchain_qdrant import QdrantVectorStore
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from qdrant_client import QdrantClient
 
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-_BASE_DIR          = Path(__file__).resolve().parent.parent
-CHROMA_DIR         = os.getenv("CHROMA_DB_PATH",        str(_BASE_DIR / "chroma_db"))
+QDRANT_URL         = os.getenv("QDRANT_URL",              "http://localhost:6333")
+QDRANT_API_KEY     = os.getenv("QDRANT_API_KEY",          "")
+EMBEDDING_MODEL    = os.getenv("EMBEDDING_MODEL",         "dangvantuan/vietnamese-embedding")
 COLLECTION_NAME    = "tourism_knowledge"
 TOP_K_VECTOR       = int(os.getenv("RAG_TOP_K_VECTOR",  "20"))
 TOP_K_BM25         = int(os.getenv("RAG_TOP_K_BM25",    "10"))
@@ -31,14 +33,15 @@ TOP_K_FINAL        = int(os.getenv("RAG_TOP_K_FINAL",   "5"))
 SCORE_THRESHOLD    = float(os.getenv("RAG_SCORE_THRESHOLD", "0.20"))
 MAX_CONTEXT_CHARS  = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "12000"))
 RRF_K              = int(os.getenv("RAG_RRF_K",         "60"))
-RERANK_MODEL       = os.getenv("RAG_RERANK_MODEL", "openai")   # "openai" | "cross-encoder/ms-marco-MiniLM-L-6-v2"
+RERANK_MODEL       = os.getenv("RAG_RERANK_MODEL", "cosine")   # "cosine" | "cross-encoder/ms-marco-MiniLM-L-6-v2"
 RERANK_ENABLED     = os.getenv("RAG_RERANK_ENABLED", "false").lower() == "true"
 DEFAULT_FILTERS: dict = {}
 
 
 class RAGService:
     def __init__(self):
-        self.vectorstore: Optional[Chroma] = None
+        self.vectorstore: Optional[QdrantVectorStore] = None
+        self.qdrant_client: Optional[QdrantClient] = None
         self.embeddings = None
         self._ready = False
         self._bm25 = None
@@ -49,34 +52,55 @@ class RAGService:
     # ── INIT ──────────────────────────────────────────────────────────────────
 
     async def initialize(self):
-        """Load ChromaDB và build BM25 index song song."""
+        """Load Qdrant vectorstore và build BM25 index song song."""
         try:
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                logger.warning("⚠️  Không có OPENAI_API_KEY — RAG tắt")
-                return
-
-            self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=api_key)
-
-            if not Path(CHROMA_DIR).exists():
-                logger.warning(f"⚠️  Chưa có ChromaDB tại {CHROMA_DIR}. Chạy ingest.py trước.")
-                return
-
-            self.vectorstore = Chroma(
-                collection_name=COLLECTION_NAME,
-                embedding_function=self.embeddings,
-                persist_directory=CHROMA_DIR
+            logger.info(f"⚙️  Đang load embedding model: {EMBEDDING_MODEL}...")
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name=EMBEDDING_MODEL,
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
             )
+            logger.info(f"✅ Embedding model loaded: {EMBEDDING_MODEL}")
+
+            # Kết nối Qdrant Cloud
+            if not QDRANT_URL or not QDRANT_API_KEY:
+                logger.warning("⚠️  Chưa cấu hình QDRANT_URL / QDRANT_API_KEY — RAG tắt")
+                return
+
+            self.qdrant_client = QdrantClient(
+                url=QDRANT_URL,
+                api_key=QDRANT_API_KEY,
+            )
+
+            # Kiểm tra collection có tồn tại không
             try:
-                count = self.vectorstore._collection.count()
+                collections = self.qdrant_client.get_collections().collections
+                collection_names = [c.name for c in collections]
+                if COLLECTION_NAME not in collection_names:
+                    logger.warning(f"⚠️  Collection '{COLLECTION_NAME}' chưa tồn tại trên Qdrant. Chạy ingest.py trước.")
+                    return
+            except Exception as e:
+                logger.error(f"❌ Không thể kết nối Qdrant Cloud: {e}")
+                return
+
+            self.vectorstore = QdrantVectorStore(
+                client=self.qdrant_client,
+                collection_name=COLLECTION_NAME,
+                embedding=self.embeddings,
+            )
+
+            # Lấy số lượng vectors
+            try:
+                collection_info = self.qdrant_client.get_collection(COLLECTION_NAME)
+                count = collection_info.points_count
             except Exception:
-                count = len(self.vectorstore.get()["ids"])
+                count = 0
 
             if count == 0:
-                logger.warning("⚠️  ChromaDB rỗng. Chạy ingest.py trước.")
+                logger.warning("⚠️  Qdrant collection rỗng. Chạy ingest.py trước.")
                 return
 
-            logger.info(f"✅ ChromaDB: {count} chunks")
+            logger.info(f"✅ Qdrant Cloud: {count} chunks")
             # Build BM25 trong thread để không block event loop
             await asyncio.get_event_loop().run_in_executor(None, self._build_bm25_index)
             self._ready = True
@@ -86,27 +110,48 @@ class RAGService:
             logger.error(f"❌ RAG init lỗi: {e}", exc_info=True)
 
     def _build_bm25_index(self):
-        """Build BM25 index từ toàn bộ corpus ChromaDB."""
+        """Build BM25 index từ toàn bộ corpus Qdrant."""
         try:
             from rank_bm25 import BM25Okapi
-            try:
-                from langchain_core.documents import Document
-            except ImportError:
-                from langchain.schema import Document  # fallback phiên bản cũ
-            data = self.vectorstore.get()
-            docs_text  = data.get("documents", [])
-            metadatas  = data.get("metadatas", [])
-            ids        = data.get("ids", [])
-            if not docs_text:
+            from langchain_core.documents import Document
+
+            # Scroll toàn bộ points từ Qdrant
+            all_texts = []
+            all_metadatas = []
+
+            offset = None
+            while True:
+                results, next_offset = self.qdrant_client.scroll(
+                    collection_name=COLLECTION_NAME,
+                    limit=100,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                if not results:
+                    break
+                for point in results:
+                    payload = point.payload or {}
+                    text = payload.get("page_content", "")
+                    metadata = payload.get("metadata", {})
+                    if text:
+                        all_texts.append(text)
+                        all_metadatas.append(metadata)
+                if next_offset is None:
+                    break
+                offset = next_offset
+
+            if not all_texts:
                 return
-            tokenized = [t.lower().split() for t in docs_text]
+
+            tokenized = [t.lower().split() for t in all_texts]
             self._bm25 = BM25Okapi(tokenized)
             self._bm25_docs = [
                 Document(
-                    page_content=docs_text[i],
-                    metadata=metadatas[i] if i < len(metadatas) else {"id": ids[i]}
+                    page_content=all_texts[i],
+                    metadata=all_metadatas[i] if i < len(all_metadatas) else {}
                 )
-                for i in range(len(docs_text))
+                for i in range(len(all_texts))
             ]
             logger.info(f"✅ BM25: {len(self._bm25_docs)} docs indexed")
         except ImportError:
@@ -117,11 +162,11 @@ class RAGService:
     def _load_reranker(self):
         """
         Thử load cross-encoder (sentence-transformers).
-        Nếu không có / lỗi torch → dùng OpenAI cosine rerank (không cần torch).
+        Nếu không có / lỗi → dùng cosine rerank bằng HuggingFace embeddings.
         """
         if self._reranker_loaded:
             return
-        if RERANK_MODEL != "openai":
+        if RERANK_MODEL != "cosine":
             try:
                 from sentence_transformers import CrossEncoder
                 self._reranker = CrossEncoder(RERANK_MODEL, max_length=512)
@@ -129,10 +174,10 @@ class RAGService:
                 self._reranker_loaded = True
                 return
             except Exception as e:
-                logger.warning(f"CrossEncoder load lỗi ({e}), chuyển sang OpenAI rerank.")
-        # Fallback: OpenAI cosine rerank (dùng embeddings đã khởi tạo)
-        self._reranker = "openai"
-        logger.info("✅ Reranker: OpenAI cosine similarity (torch-free)")
+                logger.warning(f"CrossEncoder load lỗi ({e}), chuyển sang cosine rerank.")
+        # Fallback: Cosine rerank (dùng embeddings đã khởi tạo)
+        self._reranker = "cosine"
+        logger.info("✅ Reranker: Cosine similarity (HuggingFace embeddings)")
         self._reranker_loaded = True
 
     # ── PUBLIC API ────────────────────────────────────────────────────────────
@@ -201,15 +246,16 @@ class RAGService:
             loop = asyncio.get_event_loop()
             results = await loop.run_in_executor(
                 None,
-                lambda: self.vectorstore.similarity_search_with_relevance_scores(
+                lambda: self.vectorstore.similarity_search_with_score(
                     query, k=TOP_K_VECTOR
                 )
             )
-            hits = [
-                (doc, score, rank)
-                for rank, (doc, score) in enumerate(results)
-                if score >= SCORE_THRESHOLD
-            ]
+            hits = []
+            for rank, (doc, score) in enumerate(results):
+                # Qdrant trả distance (cosine), score càng cao càng tốt
+                # LangChain Qdrant đã chuẩn hoá score
+                if score >= SCORE_THRESHOLD:
+                    hits.append((doc, score, rank))
             logger.debug(f"Vector: {len(hits)}/{TOP_K_VECTOR} above threshold={SCORE_THRESHOLD}")
             return hits
         except Exception as e:
@@ -312,8 +358,8 @@ class RAGService:
             return docs
 
         try:
-            if self._reranker == "openai":
-                return self._rerank_openai_cosine(query, docs)
+            if self._reranker == "cosine":
+                return self._cosine_rerank(query, docs)
             else:
                 # CrossEncoder
                 pairs  = [(query, doc.page_content) for doc, _ in docs]
@@ -328,10 +374,10 @@ class RAGService:
             logger.warning(f"Rerank lỗi, dùng RRF order: {e}")
             return docs
 
-    def _rerank_openai_cosine(self, query: str, docs: list[tuple]) -> list[tuple]:
+    def _cosine_rerank(self, query: str, docs: list[tuple]) -> list[tuple]:
         """
-        OpenAI cosine re-rank: embed query + mỗi chunk rồi tính cosine.
-        Không cần torch. Dùng embeddings object đã khởi tạo sẵn.
+        Cosine re-rank: embed query + mỗi chunk rồi tính cosine.
+        Dùng embeddings object (HuggingFace) đã khởi tạo sẵn.
         """
         import numpy as np
         try:
@@ -344,10 +390,10 @@ class RAGService:
                 cosine = float(np.dot(q_vec, d_vec) / (np.linalg.norm(q_vec) * np.linalg.norm(d_vec) + 1e-9))
                 scores.append((doc, cosine))
             reranked = sorted(scores, key=lambda x: x[1], reverse=True)
-            logger.debug(f"OpenAI cosine rerank top={reranked[0][1]:.3f}")
+            logger.debug(f"Cosine rerank top={reranked[0][1]:.3f}")
             return reranked
         except Exception as e:
-            logger.warning(f"OpenAI cosine rerank lỗi: {e}")
+            logger.warning(f"Cosine rerank lỗi: {e}")
             return docs
 
     # ── BUILD CONTEXT & PROMPT ────────────────────────────────────────────────
@@ -399,18 +445,19 @@ Hướng dẫn:
 
     def get_stats(self) -> dict:
         count = 0
-        if self.vectorstore:
+        if self.qdrant_client:
             try:
-                count = self.vectorstore._collection.count()
+                collection_info = self.qdrant_client.get_collection(COLLECTION_NAME)
+                count = collection_info.points_count
             except Exception:
-                count = len(self.vectorstore.get()["ids"])
+                count = 0
         return {
             "ready":           self._ready,
-            "chroma_dir":      CHROMA_DIR,
+            "qdrant_url":      QDRANT_URL,
             "total_chunks":    count,
             "bm25_docs":       len(self._bm25_docs),
             "rerank_enabled":  RERANK_ENABLED,
-            "rerank_model":    RERANK_MODEL if self._reranker != "openai" else "openai-cosine",
+            "rerank_model":    RERANK_MODEL if self._reranker != "cosine" else "cosine-similarity",
             "top_k_vector":    TOP_K_VECTOR,
             "top_k_bm25":      TOP_K_BM25,
             "top_k_final":     TOP_K_FINAL,

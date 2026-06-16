@@ -1,5 +1,5 @@
 """
-Document Loader — Nạp tài liệu du lịch PDF/Word vào ChromaDB
+Document Loader — Nạp tài liệu du lịch PDF/Word vào Qdrant
 Chạy: python ingest.py
 """
 import os
