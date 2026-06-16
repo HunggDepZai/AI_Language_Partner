@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🏛️ Ingest tài liệu du lịch vào ChromaDB
+🏛️ Ingest tài liệu du lịch vào Qdrant Cloud
 Chạy: python ingest.py
 
 Đặt các file PDF/Word vào thư mục ./data/ trước khi chạy.
@@ -16,10 +16,11 @@ logger = logging.getLogger(__name__)
 # Dùng absolute path tính từ vị trí file ingest.py để tránh lỗi khi chạy từ thư mục khác
 _INGEST_DIR = Path(__file__).resolve().parent
 DATA_DIR = os.getenv("DATA_DIR", str(_INGEST_DIR / "data"))
-CHROMA_DIR = os.getenv("CHROMA_DB_PATH", str(_INGEST_DIR / "chroma_db"))
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 COLLECTION_NAME = "tourism_knowledge"
-CHUNK_SIZE = 500      # tokens per chunk
-CHUNK_OVERLAP = 50   # tokens overlap
+CHUNK_SIZE = 150      # tokens per chunk (PhoBERT max ~256 tokens)
+CHUNK_OVERLAP = 30   # tokens overlap
 
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -34,35 +35,41 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return chunks
 
 
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "dangvantuan/vietnamese-embedding")
+
+
 def main():
-    # Kiểm tra API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        # Thử đọc từ .env
-        env_file = Path("../.env") if not Path(".env").exists() else Path(".env")
-        if env_file.exists():
-            for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
-                if line.startswith("OPENAI_API_KEY="):
-                    api_key = line.split("=", 1)[1].strip()
-                    os.environ["OPENAI_API_KEY"] = api_key
-                    break
-    
-    if not api_key:
-        print("❌ Cần OPENAI_API_KEY để tạo embeddings!")
-        print("   Thêm vào file .env: OPENAI_API_KEY=sk-...")
+    # Thử đọc từ .env
+    env_file = Path("../.env") if not Path(".env").exists() else Path(".env")
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            os.environ.setdefault(key.strip(), val.strip())
+
+    # Re-read after .env parsing
+    qdrant_url = os.getenv("QDRANT_URL", QDRANT_URL)
+    qdrant_api_key = os.getenv("QDRANT_API_KEY", QDRANT_API_KEY)
+
+    if not qdrant_url or not qdrant_api_key:
+        print("❌ Cần QDRANT_URL và QDRANT_API_KEY để kết nối Qdrant Cloud!")
+        print("   Thêm vào file .env:")
+        print("   QDRANT_URL=https://your-cluster.cloud.qdrant.io")
+        print("   QDRANT_API_KEY=your-api-key")
         sys.exit(1)
 
     # Import sau khi có API key
     try:
-        from langchain_community.vectorstores import Chroma
-        from langchain_openai import OpenAIEmbeddings
-        try:
-            from langchain_core.documents import Document
-        except ImportError:
-            from langchain.schema import Document  # fallback phiên bản cũ
+        from langchain_qdrant import QdrantVectorStore
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+        from langchain_core.documents import Document
+        from qdrant_client import QdrantClient
+        from qdrant_client.http.models import Distance, VectorParams
     except ImportError as e:
         print(f"❌ Thiếu dependency: {e}")
-        print("   Chạy: pip install langchain langchain-core langchain-community langchain-openai chromadb")
+        print("   Chạy: uv add langchain-core langchain-community langchain-qdrant qdrant-client sentence-transformers")
         sys.exit(1)
 
     from services.document_loader import load_document
@@ -90,11 +97,14 @@ def main():
         print(f"   📄 {f.name}")
 
     # Khởi tạo embeddings
-    print(f"\n⚙️  Khởi tạo OpenAI Embeddings (text-embedding-3-small)...")
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small",
-        api_key=api_key
+    embedding_model = os.getenv("EMBEDDING_MODEL", EMBEDDING_MODEL)
+    print(f"\n⚙️  Đang load HuggingFace Embedding ({embedding_model})...")
+    embeddings = HuggingFaceEmbeddings(
+        model_name=embedding_model,
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
     )
+    print(f"✅ Embedding model loaded: {embedding_model}")
 
     # Load & chunk tất cả tài liệu
     print(f"\n📖 Đang xử lý tài liệu...\n")
@@ -135,44 +145,54 @@ def main():
         print("   Đảm bảo PyMuPDF đã cài: pip install pymupdf")
         sys.exit(1)
 
-    # Lưu vào ChromaDB
-    print(f"\n💾 Đang lưu vào ChromaDB ({CHROMA_DIR})...")
+    # Kết nối Qdrant Cloud
+    print(f"\n💾 Đang kết nối Qdrant Cloud ({qdrant_url})...")
+    client = QdrantClient(
+        url=qdrant_url,
+        api_key=qdrant_api_key,
+    )
 
-    # Xóa index cũ để tránh duplicate khi ingest lại
-    chroma_path = Path(CHROMA_DIR)
-    if chroma_path.exists():
-        import shutil
-        shutil.rmtree(chroma_path)
-        print(f"   🧹 Đã xóa index cũ tại {CHROMA_DIR}")
+    # Xóa collection cũ để tránh duplicate khi ingest lại
+    try:
+        collections = client.get_collections().collections
+        collection_names = [c.name for c in collections]
+        if COLLECTION_NAME in collection_names:
+            client.delete_collection(COLLECTION_NAME)
+            print(f"   🧹 Đã xóa collection cũ: {COLLECTION_NAME}")
+    except Exception as e:
+        print(f"   ⚠️  Lỗi khi kiểm tra collection: {e}")
 
     # Batch để tránh rate limit
+    print(f"\n📤 Đang upload {total_chunks} chunks lên Qdrant Cloud...")
     batch_size = 100
     vectorstore = None
 
     for i in range(0, len(all_docs), batch_size):
         batch = all_docs[i:i + batch_size]
         if vectorstore is None:
-            vectorstore = Chroma.from_documents(
+            vectorstore = QdrantVectorStore.from_documents(
                 documents=batch,
                 embedding=embeddings,
-                persist_directory=CHROMA_DIR,
-                collection_name=COLLECTION_NAME
+                url=qdrant_url,
+                api_key=qdrant_api_key,
+                collection_name=COLLECTION_NAME,
             )
         else:
             vectorstore.add_documents(batch)
-        
-        progress = min(i + batch_size, len(all_docs))
-        print(f"   [{progress}/{len(all_docs)}] chunks đã lưu...", end="\r")
 
-    print(f"\n\n✅ Hoàn tất! ChromaDB đã sẵn sàng tại: {CHROMA_DIR}")
-    print(f"   Collection: {COLLECTION_NAME}")
-    if vectorstore is not None:
-        try:
-            count = vectorstore._collection.count()
-        except Exception:
-            count = total_chunks
-    else:
+        progress = min(i + batch_size, len(all_docs))
+        print(f"   [{progress}/{len(all_docs)}] chunks đã upload...", end="\r")
+
+    # Xác nhận kết quả
+    try:
+        collection_info = client.get_collection(COLLECTION_NAME)
+        count = collection_info.points_count
+    except Exception:
         count = total_chunks
+
+    print(f"\n\n✅ Hoàn tất! Qdrant Cloud đã sẵn sàng")
+    print(f"   URL: {qdrant_url}")
+    print(f"   Collection: {COLLECTION_NAME}")
     print(f"   Tổng chunks: {count}")
     print(f"\n🚀 Giờ chạy backend: python main.py\n")
 
