@@ -1,312 +1,295 @@
-# 🇻🇳 Trợ Lý AI Tiếng Việt — Vietnamese Voice AI Assistant
+# Vietnamese Voice AI Assistant
 
-> Trò chuyện bằng giọng nói tiếng Việt với AI, tương tự ChatGPT Advanced Voice Mode.
+A web-based AI voice assistant for Vietnamese conversations, combining speech processing, large language models, and text-to-speech technologies in a full-stack application.
 
-![Pipeline](https://img.shields.io/badge/Pipeline-VAD→STT→LLM→TTS-blue)
-![Python](https://img.shields.io/badge/Python-3.10+-green)
-![React](https://img.shields.io/badge/React-18-blue)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+## Overview
 
----
+**Vietnamese Voice AI Assistant** is a project exploring how modern AI technologies can be integrated into a conversational voice application.
 
-## 🎯 Tính năng
+The system connects a React frontend to a Python backend through WebSocket communication. Its voice-processing pipeline combines Voice Activity Detection (VAD), Speech-to-Text (STT), Large Language Models (LLM), and Text-to-Speech (TTS).
 
-- 🎤 **Nhận dạng giọng nói tiếng Việt** — Whisper Large V3 (OpenAI/Groq)
-- 🧠 **Trí tuệ nhân tạo** — GPT-4o / GPT-4o-mini / Llama / Ollama
-- 🔊 **Giọng nói AI tiếng Việt** — Edge-TTS (miễn phí) / VieNeu-TTS (local) / VietTTS
-- ⚡ **Streaming thời gian thực** — AI trả lời theo từng câu, không phải chờ hết
-- 🎛️ **2 giọng Việt** — Hoài My (nữ) và Nam Minh (nam)
-- 🛑 **Ngắt giữa chừng** — Nhấn để ngắt khi AI đang nói
-- 📱 **Responsive** — Chạy tốt trên điện thoại
-- 🐳 **Docker** — 1 lệnh chạy tất cả
+The project supports OpenAI and Groq as AI service providers, with Edge-TTS for speech synthesis.
 
----
+## Key Features
 
-## 🏗️ Kiến trúc
+- **Vietnamese Voice Interaction** – Designed for voice-based conversations in Vietnamese.
+- **Speech Recognition** – Supports OpenAI and Groq speech recognition providers.
+- **AI-Powered Responses** – Integrates OpenAI and Groq language model providers.
+- **Text-to-Speech** – Uses Edge-TTS to generate spoken responses.
+- **Voice Activity Detection** – Uses Silero VAD for voice activity detection.
+- **WebSocket Communication** – Connects the frontend and backend for voice interaction.
+- **Modular Architecture** – Separates voice processing services from the frontend application.
 
+## Tech Stack
+
+| Category | Technologies |
+|---|---|
+| Programming Languages | Python, JavaScript |
+| Backend | FastAPI, Uvicorn |
+| Frontend | React 18, Vite |
+| Communication | WebSocket |
+| Voice Activity Detection | Silero VAD |
+| Speech-to-Text | OpenAI, Groq |
+| Large Language Model | OpenAI, Groq |
+| Text-to-Speech | Edge-TTS |
+| AI / Data Processing | LangChain, Qdrant, Sentence Transformers |
+| Dependency Management | uv, npm |
+
+## System Architecture
+
+The application follows a client-server architecture with a modular AI processing pipeline.
+
+```text
++--------------------------------------+
+|             FRONTEND                 |
+|                                      |
+|           React + Vite               |
+|                                      |
+|     Microphone / Audio Interface     |
+|                 |                    |
+|             WebSocket                 |
++-----------------|--------------------+
+                  |
+                  v
++--------------------------------------+
+|              BACKEND                 |
+|                                      |
+|             FastAPI                  |
+|              Python                  |
+|                 |                    |
+|                 v                    |
+|       +--------------------+         |
+|       |   Voice Pipeline   |         |
+|       +--------------------+         |
+|                 |                    |
+|        +--------+--------+           |
+|        |        |        |           |
+|        v        v        v           |
+|       VAD      STT      LLM          |
+|        |        |        |           |
+|        |        |        v           |
+|        |        |   AI Response      |
+|        |        |        |           |
+|        +--------+--------+           |
+|                 |                    |
+|                 v                    |
+|                TTS                   |
+|                 |                    |
+|                 v                    |
+|           Audio Output               |
++--------------------------------------+
+                  |
+                  v
+             FRONTEND
 ```
-┌─────────────────────────────────────────────┐
-│                  FRONTEND                    │
-│          React + Vite + WebSocket           │
-│    ┌──────┐  ┌──────┐  ┌───────────┐       │
-│    │ Mic  │→ │Record│→ │ WebSocket │──┐    │
-│    └──────┘  └──────┘  └───────────┘  │    │
-│    ┌──────┐  ┌──────┐  ┌───────────┐  │    │
-│    │Speaker│← │ Play │← │  Audio   │←─┘    │
-│    └──────┘  └──────┘  └───────────┘       │
-└─────────────────────────────────────────────┘
-                    ↕ WebSocket
-┌─────────────────────────────────────────────┐
-│                  BACKEND                     │
-│              FastAPI + Python                │
-│                                             │
-│  Audio → [VAD] → [STT] → [LLM] → [TTS] → Audio
-│           │        │        │        │       │
-│         Silero   Whisper  GPT-4o  Edge-TTS  │
-│          VAD    Large V3          Tiếng Việt │
-└─────────────────────────────────────────────┘
+
+## AI Voice Processing Pipeline
+
+The core processing workflow consists of four main stages:
+
+### 1. Voice Activity Detection (VAD)
+
+Uses Silero VAD to detect voice activity in incoming audio.
+
+### 2. Speech-to-Text (STT)
+
+Converts spoken Vietnamese into text using the configured provider:
+
+- OpenAI
+- Groq
+
+### 3. Large Language Model (LLM)
+
+Processes recognized text and generates conversational responses using the configured provider:
+
+- OpenAI
+- Groq
+
+### 4. Text-to-Speech (TTS)
+
+Uses Edge-TTS to convert AI-generated text into spoken audio.
+
+```text
+Audio Input
+    |
+    v
+Silero VAD
+    |
+    v
+Speech-to-Text
+(OpenAI / Groq)
+    |
+    v
+Large Language Model
+(OpenAI / Groq)
+    |
+    v
+Edge-TTS
+    |
+    v
+Audio Output
 ```
 
----
+## Project Structure
 
-## 🚀 Cài đặt nhanh (3 phút)
+```text
+AI_Language_Partner/
+|
+|-- backend/
+|   |-- main.py
+|   |-- pyproject.toml
+|   |-- uv.lock
+|   |-- services/
+|   |-- ...
+|
+|-- frontend/
+|   |-- package.json
+|   |-- package-lock.json
+|   |-- src/
+|   |-- ...
+|
+|-- .env.example
+|-- .gitignore
+|-- docker-compose.yml
+|-- README.md
+```
 
-### Yêu cầu
-- Python 3.10+
-- Node.js 18+
-- OpenAI API key (hoặc Groq API key miễn phí)
+*The structure above highlights the main project files. Some implementation files and directories are omitted for readability.*
 
-### Cách 1: Script tự động
+## Getting Started
+
+### Prerequisites
+
+Make sure you have installed:
+
+- Python 3.14 or later
+- Node.js and npm
+- uv
+- An OpenAI API key and/or Groq API key, depending on your selected providers
+
+### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-repo/vietnamese-voice-ai.git
-cd vietnamese-voice-ai
+git clone https://github.com/HunggDepZai/AI_Language_Partner.git
 
-# Cài đặt tất cả
-chmod +x setup.sh run.sh
-./setup.sh
-
-# Chạy
-./run.sh
-
-# Mở http://localhost:3000
+cd AI_Language_Partner
 ```
 
-### Cách 2: Chạy thủ công
+### 2. Configure Environment Variables
+
+Create a local environment file from the example:
+
+**Windows PowerShell:**
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Open `.env` and configure the required API credentials and application settings.
+
+For example:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+GROQ_API_KEY=your_groq_api_key
+```
+
+Use the variable names and configuration options defined in `.env.example` as the source of truth.
+
+**Important:** Never commit your actual `.env` file or expose API keys in source code, screenshots, or public repositories.
+
+### 3. Install Backend Dependencies
+
+From the project root:
 
 ```bash
-# 1. Clone project
-git clone https://github.com/your-repo/vietnamese-voice-ai.git
-cd vietnamese-voice-ai
-
-# 2. Cấu hình
-cp .env.example .env
-# Mở .env và điền OPENAI_API_KEY=sk-...
-
-# 3. Cài backend
 cd backend
-pip install -r requirements.txt
-cd ..
 
-# 4. Cài frontend
+uv sync --python 3.14
+```
+
+### 4. Install Frontend Dependencies
+
+Open another terminal:
+
+```bash
 cd frontend
-npm install
-cd ..
 
-# 5. Chạy backend (Terminal 1)
+npm ci
+```
+
+### 5. Start the Backend
+
+In the backend terminal:
+
+```bash
 cd backend
-python main.py
 
-# 6. Chạy frontend (Terminal 2)
+uv run python main.py
+```
+
+The backend is configured to run on:
+
+```text
+http://localhost:8000
+```
+
+### 6. Start the Frontend
+
+In a separate terminal:
+
+```bash
 cd frontend
+
 npm run dev
-
-# 7. Mở http://localhost:3000
 ```
 
-### Cách 3: Docker
+Open the application in your browser:
 
-```bash
-cp .env.example .env
-# Điền API key vào .env
-
-docker compose up --build
-
-# Mở http://localhost:3000
+```text
+http://localhost:3000
 ```
+
+Keep both terminal processes running while using the application.
+
+## Configuration
+
+The application supports the following AI service providers:
+
+| Component | Supported Configuration |
+|---|---|
+| Voice Activity Detection | Silero VAD |
+| Speech-to-Text | OpenAI / Groq |
+| Language Model | OpenAI / Groq |
+| Text-to-Speech | Edge-TTS |
+
+Provider selection and model settings are managed through environment variables.
+
+Refer to `.env.example` for the exact configuration keys and supported values.
+
+## Development Roadmap
+
+Potential improvements for future development include:
+
+- Improving real-time voice interaction and response latency.
+- Enhancing audio streaming and interruption handling.
+- Improving speech recognition accuracy for Vietnamese.
+- Expanding support for additional AI model providers.
+- Adding more Vietnamese text-to-speech options.
+- Improving error handling and application reliability.
+- Adding automated tests and deployment documentation.
+- Enhancing the user interface and conversation experience.
+
+## License
+
+Please refer to the repository's license file for licensing terms.
+
+## Author
+
+**Hung Nguyen**
+
+GitHub: [HunggDepZai](https://github.com/HunggDepZai)
 
 ---
 
-## ⚙️ Cấu hình
-
-Chỉnh file `.env` để thay đổi cấu hình:
-
-### STT (Nhận dạng giọng nói)
-
-| Provider | Model | Tốc độ | Chi phí | Cách dùng |
-|----------|-------|--------|---------|-----------|
-| **OpenAI** | whisper-1 | ~1-2s | $0.006/phút | `STT_PROVIDER=openai` |
-| **Groq** | whisper-large-v3 | ~0.1s | Miễn phí* | `STT_PROVIDER=groq` |
-
-*Groq miễn phí 14,400 giây/ngày
-
-### LLM (Trí tuệ nhân tạo)
-
-| Provider | Model | Chất lượng | Chi phí |
-|----------|-------|-----------|---------|
-| **OpenAI** | gpt-4o-mini | ⭐⭐⭐⭐ | Rẻ |
-| **OpenAI** | gpt-4o | ⭐⭐⭐⭐⭐ | Trung bình |
-| **Groq** | llama-3.3-70b-versatile | ⭐⭐⭐⭐ | Miễn phí* |
-| **Ollama** | qwen2.5:7b | ⭐⭐⭐ | Miễn phí (local) |
-
-### TTS (Giọng nói AI)
-
-| Engine | Giọng Việt | Chất lượng | Chi phí | GPU |
-|--------|-----------|-----------|---------|-----|
-| **Edge-TTS** | Hoài My, Nam Minh | ⭐⭐⭐⭐ | Miễn phí | Không |
-| **VieNeu-TTS** | Voice cloning | ⭐⭐⭐⭐⭐ | Miễn phí | Không (CPU) |
-| **VietTTS** | 10+ giọng | ⭐⭐⭐⭐⭐ | Miễn phí | Có (NVIDIA) |
-
----
-
-## 💡 Combo gợi ý
-
-### 🆓 Hoàn toàn miễn phí (chất lượng tốt)
-```env
-STT_PROVIDER=groq
-LLM_PROVIDER=groq
-LLM_MODEL=llama-3.3-70b-versatile
-TTS_ENGINE=edge
-```
-
-### 💰 Chất lượng cao nhất (~$0.02/cuộc hội thoại)
-```env
-STT_PROVIDER=groq
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o
-TTS_ENGINE=edge
-```
-
-### 🖥️ Offline hoàn toàn (cần máy mạnh)
-```env
-STT_PROVIDER=openai  # thay bằng local whisper
-LLM_PROVIDER=ollama
-LLM_MODEL=qwen2.5:7b
-TTS_ENGINE=vieneu
-OLLAMA_URL=http://localhost:11434
-```
-
----
-
-## 📁 Cấu trúc project
-
-```
-vietnamese-voice-ai/
-├── .env.example          # Mẫu cấu hình
-├── docker-compose.yml    # Docker deployment
-├── setup.sh             # Script cài đặt tự động
-├── run.sh               # Script chạy ứng dụng
-├── README.md            # Tài liệu này
-│
-├── backend/
-│   ├── main.py          # FastAPI server + WebSocket
-│   ├── requirements.txt # Python dependencies
-│   ├── Dockerfile
-│   └── services/
-│       ├── vad_service.py   # Silero VAD - phát hiện giọng nói
-│       ├── stt_service.py   # Whisper - nhận dạng tiếng Việt
-│       ├── llm_service.py   # GPT-4o - xử lý ngôn ngữ
-│       └── tts_service.py   # Edge-TTS - tổng hợp giọng nói
-│
-└── frontend/
-    ├── index.html
-    ├── package.json
-    ├── vite.config.js
-    ├── Dockerfile
-    └── src/
-        ├── main.jsx
-        ├── App.jsx          # Main app component
-        ├── styles.css       # Global styles
-        ├── hooks/
-        │   └── useVoiceChat.js  # WebSocket + audio logic
-        └── components/
-            ├── ChatMessages.jsx    # Hiển thị tin nhắn
-            ├── VoiceControl.jsx    # Nút mic + controls
-            └── AudioVisualizer.jsx # Sóng âm thanh
-```
-
----
-
-## 🔧 Nâng cấp
-
-### Thêm VieNeu-TTS (TTS local, voice cloning)
-
-```bash
-# Windows
-pip install vieneu --extra-index-url https://pnnbao97.github.io/llama-cpp-python-v0.3.16/cpu/
-
-# macOS
-pip install vieneu --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal/
-
-# Linux
-pip install vieneu
-
-# Đổi .env
-TTS_ENGINE=vieneu
-```
-
-### Thêm VietTTS Server (nhiều giọng đẹp, cần GPU)
-
-```bash
-git clone https://github.com/dangvansam/viet-tts.git
-cd viet-tts
-docker compose up -d
-# Server chạy tại http://localhost:8298
-
-# Đổi .env
-TTS_ENGINE=viettts
-VIETTTS_URL=http://localhost:8298
-```
-
-### Dùng Ollama (LLM offline)
-
-```bash
-# Cài Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Tải model
-ollama pull qwen2.5:7b
-
-# Đổi .env
-LLM_PROVIDER=ollama
-LLM_MODEL=qwen2.5:7b
-```
-
----
-
-## 🐛 Xử lý lỗi thường gặp
-
-| Lỗi | Nguyên nhân | Cách fix |
-|-----|-------------|----------|
-| "Không kết nối được server" | Backend chưa chạy | Chạy `cd backend && python main.py` |
-| "Không truy cập microphone" | Browser chặn mic | Cho phép quyền mic trong browser settings |
-| "Không nghe rõ" | Âm thanh quá ngắn/nhỏ | Nói to hơn, giữ nút lâu hơn |
-| OpenAI API error | Sai API key | Kiểm tra OPENAI_API_KEY trong .env |
-| "Module not found" | Chưa cài dependencies | Chạy `pip install -r requirements.txt` |
-
----
-
-## 📊 So sánh với các project khác
-
-| Tính năng | Project này | VietGPT VoiceBot | HF Speech-to-Speech |
-|-----------|-------------|-------------------|---------------------|
-| Tiếng Việt native | ✅ | ✅ | ⚠️ (cần config) |
-| Streaming response | ✅ | ❌ | ✅ |
-| Web UI đẹp | ✅ | ❌ (terminal) | ❌ |
-| Nhiều TTS engine | ✅ (3 engine) | ❌ (gTTS) | ✅ |
-| Ngắt giữa chừng | ✅ | ❌ | ❌ |
-| Voice cloning | ✅ (VieNeu) | ❌ | ❌ |
-| Docker | ✅ | ❌ | ✅ |
-| Dễ cài đặt | ✅ (3 phút) | ✅ | ⚠️ |
-
----
-
-## 📝 License
-
-MIT License - Sử dụng tự do cho mục đích cá nhân và thương mại.
-
----
-
-## 🙏 Credits
-
-- [OpenAI Whisper](https://github.com/openai/whisper) — Speech recognition
-- [Edge-TTS](https://github.com/rany2/edge-tts) — Microsoft TTS miễn phí
-- [VieNeu-TTS](https://github.com/pnnbao97/VieNeu-TTS) — Vietnamese TTS + voice cloning
-- [VietTTS](https://github.com/dangvansam/viet-tts) — Vietnamese TTS server
-- [Silero VAD](https://github.com/snakers4/silero-vad) — Voice Activity Detection
-- [FastAPI](https://fastapi.tiangolo.com/) — Python web framework
-- [Vite](https://vitejs.dev/) + [React](https://react.dev/) — Frontend
-
----
-
-**Made with ❤️ for Vietnamese 🇻🇳**
+*Built to explore AI-powered Vietnamese voice interaction.* 🇻🇳
